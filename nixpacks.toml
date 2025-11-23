@@ -1,0 +1,5 @@
+[phases.setup]
+nodejs_version = "20"
+
+[phases.build]
+cmd = "pnpm run build"
