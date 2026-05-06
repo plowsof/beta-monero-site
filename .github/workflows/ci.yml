@@ -143,4 +143,4 @@ jobs:
         with:
           files: dist.tar.gz
           append_body: true
-          body: "`blabla` ${{ needs.reproducible-archive.outputs.hash-1 }}"
+          body: "\n `dist.tar.gz` hash: `${{ needs.reproducible-archive.outputs.hash-1 }}`"
