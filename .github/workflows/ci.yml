@@ -94,6 +94,7 @@ jobs:
             --owner=0 \
             --group=0 \
             --numeric-owner \
+            --mode='u=rwX,go=rX' \
             -czf dist.tar.gz dist/
 
       - name: Hash archive
