@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload release archive
         if: github.event_name == 'release' && matrix.run == 1
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-dist-archive
           path: dist.tar.gz
@@ -133,7 +133,7 @@ jobs:
 
       - name: Download release archive
         if: github.event_name == 'release'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-dist-archive
 
@@ -142,5 +142,3 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: dist.tar.gz
-          append_body: true
-          body: "\n `dist.tar.gz` hash: `${{ needs.reproducible-archive.outputs.hash-1 }}`"
