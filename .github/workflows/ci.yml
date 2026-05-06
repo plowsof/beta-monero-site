@@ -97,6 +97,7 @@ jobs:
             -czf dist.tar.gz dist/
 
       - name: Hash archive
+        id: hash
         run: |
           HASH=$(sha256sum dist.tar.gz | awk '{print $1}')
           echo "hash-${{ matrix.run }}=$HASH" >> $GITHUB_OUTPUT
