@@ -1,5 +1,3 @@
-# https://docs.github.com/en/rest/releases/releases?apiVersion=2026-03-10#get-a-release 
-# "target_commitish" todo 
 name: CI
 
 on:
@@ -9,6 +7,7 @@ on:
     branches: [main]
   release:
     types: [published]
+    branches: [main]
 
 permissions:
   contents: read
