@@ -57,6 +57,9 @@ jobs:
     strategy:
       matrix:
         run: [1, 2]
+    outputs:
+      hash-1: ${{ steps.hash.outputs.hash-1 }}
+      hash-2: ${{ steps.hash.outputs.hash-2 }}
 
     steps:
       - uses: actions/checkout@v6
@@ -94,13 +97,9 @@ jobs:
             -czf dist.tar.gz dist/
 
       - name: Hash archive
-        run: sha256sum dist.tar.gz | awk '{print $1}' > dist-hash-${{ matrix.run }}.txt
-
-      - name: Upload hash
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-hash-${{ matrix.run }}
-          path: dist-hash-${{ matrix.run }}.txt
+        run: |
+          HASH=$(sha256sum dist.tar.gz | awk '{print $1}')
+          echo "hash-${{ matrix.run }}=$HASH" >> $GITHUB_OUTPUT
 
       - name: Upload release archive
         if: github.event_name == 'release' && matrix.run == 1
@@ -118,25 +117,14 @@ jobs:
       contents: write
 
     steps:
-      - name: Download hash (run 1)
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-hash-1
-
-      - name: Download hash (run 2)
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-hash-2
-
       - name: Compare hashes
         run: |
-          HASH1=$(cat dist-hash-1.txt)
-          HASH2=$(cat dist-hash-2.txt)
-
+          HASH1="${{ needs.reproducible-archive.outputs.hash-1 }}"
+          HASH2="${{ needs.reproducible-archive.outputs.hash-2 }}"
           if [ "$HASH1" = "$HASH2" ]; then
-            echo "Archive is reproducible — hashes match."
+            echo "hashes match."
           else
-            echo "Reproducibility check failed — hashes differ."
+            echo "hash mismatch."
             exit 1
           fi
 
@@ -148,6 +136,7 @@ jobs:
 
       - name: Upload release asset
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist.tar.gz
+          append_body: ${{ needs.reproducible-archive.outputs.hash-1 }}
