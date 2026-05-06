@@ -7,7 +7,6 @@ on:
     branches: [main]
   release:
     types: [published]
-    branches: [main]
 
 permissions:
   contents: read
@@ -15,6 +14,7 @@ permissions:
 jobs:
   lint:
     name: Lint & Format
+    if: github.event_name != 'release' || github.event.release.target_commitish == 'beta'
     runs-on: ubuntu-22.04
 
     steps:
@@ -54,6 +54,7 @@ jobs:
 
   reproducible-archive:
     name: Reproducible Archive (Run ${{ matrix.run }})
+    if: github.event_name != 'release' || github.event.release.target_commitish == 'beta'
     runs-on: ubuntu-22.04
     strategy:
       matrix:
@@ -79,7 +80,7 @@ jobs:
 
       - name: Prepare source for CI/Release build
         env:
-          BASE_BRANCH: ${{ github.event_name != 'release' && github.event.pull_request.base.ref || '' }}
+          BASE_BRANCH: ${{ github.event_name != 'release' && github.event.pull_request.base.ref || '' }}  # PR target branch
           BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }} # previous commit before the push event
           LIMIT_POSTS: ${{ github.event_name != 'release' && '10' || '' }}
           SKIP_IMAGE_OPTIMIZATION: ${{ github.event_name != 'release' && 'true' || '' }}
@@ -87,7 +88,7 @@ jobs:
           LIMIT_LOCALES: ${{ github.event_name != 'release' && 'true' || '' }}
         run: pnpm prepare-build && pnpm build
 
-      - name: Create reproducible archive
+      - name: Create archive
         run: |
           tar \
             --sort=name \
@@ -108,11 +109,12 @@ jobs:
         if: github.event_name == 'release' && matrix.run == 1
         uses: actions/upload-artifact@v7
         with:
-          name: release-dist-archive
+          name: deploy-dist-archive
           path: dist.tar.gz
 
   compare-archives:
-    name: Reproducible Archive - Compare Hashes
+    name: Compare hashes
+    if: github.event_name != 'release' || github.event.release.target_commitish == 'beta'
     runs-on: ubuntu-22.04
     needs: reproducible-archive
 
@@ -120,7 +122,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Compare hashes
+      - name: Compare
         run: |
           HASH1="${{ needs.reproducible-archive.outputs.hash-1 }}"
           HASH2="${{ needs.reproducible-archive.outputs.hash-2 }}"
@@ -135,7 +137,7 @@ jobs:
         if: github.event_name == 'release'
         uses: actions/download-artifact@v8
         with:
-          name: release-dist-archive
+          name: deploy-dist-archive
 
       - name: Upload release asset
         if: github.event_name == 'release'
