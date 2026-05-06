@@ -139,4 +139,5 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: dist.tar.gz
-          append_body: ${{ needs.reproducible-archive.outputs.hash-1 }}
+          append_body: true
+          body: "`blabla` ${{ needs.reproducible-archive.outputs.hash-1 }}"
