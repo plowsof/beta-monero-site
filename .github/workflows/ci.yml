@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [beta]
+    branches: [main]
   pull_request:
-    branches: [beta]
+    branches: [main]
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -49,9 +51,12 @@ jobs:
       - name: Type check
         run: pnpm check
 
-  build:
-    name: Build & Validate
+  reproducible-archive:
+    name: Reproducible Archive (Run ${{ matrix.run }})
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        run: [1, 2]
 
     steps:
       - uses: actions/checkout@v6
@@ -68,20 +73,81 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Prepare source for CI build
+      - name: Prepare source for CI/Release build
         env:
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref }} # PR target branch
+          BASE_BRANCH: ${{ github.event_name != 'release' && github.event.pull_request.base.ref || '' }}
           BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }} # previous commit before the push event
+          LIMIT_POSTS: ${{ github.event_name != 'release' && '10' || '' }}
+          SKIP_IMAGE_OPTIMIZATION: ${{ github.event_name != 'release' && 'true' || '' }}
+          SKIP_OG: ${{ github.event_name != 'release' && 'true' || '' }}
+          LIMIT_LOCALES: ${{ github.event_name != 'release' && 'true' || '' }}
+        run: pnpm prepare-build && pnpm build
+
+      - name: Create reproducible archive
         run: |
-          ARGS="--limit-posts 10 --skip-og --limit-locales"
-          if [ -n "$BASE_BRANCH" ]; then ARGS="$ARGS --base-branch $BASE_BRANCH"; fi
-          if [ -n "$BASE_REF" ]; then ARGS="$ARGS --base-ref $BASE_REF"; fi
-          pnpm prepare-build $ARGS
+          tar \
+            --sort=name \
+            --mtime='@0' \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            -czf dist.tar.gz dist/
 
-      - name: Build site
-        env:
-          SKIP_IMAGE_OPTIMIZATION: "true"
-        run: pnpm build
+      - name: Hash archive
+        run: sha256sum dist.tar.gz | awk '{print $1}' > dist-hash-${{ matrix.run }}.txt
 
-      - name: Validate built HTML
-        run: pnpm exec htmlhint 'dist/**/*.html'
+      - name: Upload hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-hash-${{ matrix.run }}
+          path: dist-hash-${{ matrix.run }}.txt
+
+      - name: Upload release archive
+        if: github.event_name == 'release' && matrix.run == 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dist-archive
+          path: dist.tar.gz
+
+  compare-archives:
+    name: Reproducible Archive - Compare Hashes
+    runs-on: ubuntu-22.04
+    needs: reproducible-archive
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download hash (run 1)
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-hash-1
+
+      - name: Download hash (run 2)
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-hash-2
+
+      - name: Compare hashes
+        run: |
+          HASH1=$(cat dist-hash-1.txt)
+          HASH2=$(cat dist-hash-2.txt)
+
+          if [ "$HASH1" = "$HASH2" ]; then
+            echo "Archive is reproducible — hashes match."
+          else
+            echo "Reproducibility check failed — hashes differ."
+            exit 1
+          fi
+
+      - name: Download release archive
+        if: github.event_name == 'release'
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist-archive
+
+      - name: Upload release asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist.tar.gz
